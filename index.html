@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>GLD Task Tracker</title>
+    <meta name="theme-color" content="#05668d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="GLD Tasks" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">GLD Task Tracker</p>
+          <h1>Daily Jobs</h1>
+        </div>
+        <div class="topbar-meta">
+          <div class="connection-pill" id="connection-state">Offline</div>
+          <button class="btn sync" id="sync-now" type="button">Sync</button>
+          <div class="date-pill" id="current-date"></div>
+        </div>
+      </header>
+
+      <section class="job-selector">
+        <label for="job-list">Jobs for Today</label>
+        <select id="job-list" aria-label="Select a job"></select>
+      </section>
+
+      <section class="workspace">
+        <aside class="task-list-panel">
+          <h2>Task Queue</h2>
+          <ul id="task-list"></ul>
+        </aside>
+
+        <section class="running-grid" aria-label="Running task timers">
+          <article class="task-slot" data-slot="0"></article>
+          <article class="task-slot" data-slot="1"></article>
+          <article class="task-slot" data-slot="2"></article>
+          <article class="task-slot" data-slot="3"></article>
+        </section>
+      </section>
+    </main>
+
+    <template id="task-slot-template">
+      <div class="slot-head">
+        <span class="slot-label"></span>
+        <span class="status-pill"></span>
+      </div>
+      <h3 class="task-title"></h3>
+      <p class="task-priority"></p>
+      <p class="timer">00:00:00</p>
+      <div class="controls">
+        <button class="btn start">Start</button>
+        <button class="btn pause">Pause</button>
+        <button class="btn finish">Finish</button>
+      </div>
+    </template>
+
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
