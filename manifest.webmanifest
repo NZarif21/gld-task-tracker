@@ -1,0 +1,17 @@
+{
+  "name": "GLD Task Tracker",
+  "short_name": "GLD Tasks",
+  "description": "Task tracking for car detailing jobs",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef2f7",
+  "theme_color": "#05668d",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
