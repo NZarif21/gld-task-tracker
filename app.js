@@ -3,10 +3,12 @@ const POLL_MS = 15000;
 const TICK_MS = 500;
 const CACHE_KEY = "gld_task_tracker_cache_v1";
 const MUTATION_QUEUE_KEY = "gld_task_tracker_mutation_queue_v1";
+const THEME_KEY = "gld_task_tracker_theme_v1";
 
 const appState = {
   jobs: [],
   selectedJobId: null,
+  selectedDate: todayIsoDateLocal(),
   tasks: [],
   taskCacheByJob: {},
   timerHandle: null,
@@ -15,6 +17,7 @@ const appState = {
   isOnline: navigator.onLine,
   mutationQueue: [],
   syncInFlight: false,
+  theme: "light",
 };
 
 function todayIsoDateLocal() {
@@ -51,6 +54,7 @@ function loadCachedState() {
     const parsed = JSON.parse(raw);
     appState.jobs = Array.isArray(parsed.jobs) ? parsed.jobs : [];
     appState.selectedJobId = parsed.selectedJobId || null;
+    appState.selectedDate = parsed.selectedDate || todayIsoDateLocal();
     appState.taskCacheByJob = parsed.taskCacheByJob || {};
     appState.tasks = appState.selectedJobId
       ? appState.taskCacheByJob[appState.selectedJobId] || []
@@ -67,6 +71,7 @@ function persistCachedState() {
       JSON.stringify({
         jobs: appState.jobs,
         selectedJobId: appState.selectedJobId,
+        selectedDate: appState.selectedDate,
         taskCacheByJob: appState.taskCacheByJob,
       })
     );
@@ -86,6 +91,40 @@ function loadMutationQueue() {
 
 function persistMutationQueue() {
   localStorage.setItem(MUTATION_QUEUE_KEY, JSON.stringify(appState.mutationQueue));
+}
+
+function loadThemePreference() {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === "light" || stored === "dark") {
+    appState.theme = stored;
+    return;
+  }
+
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  appState.theme = prefersDark ? "dark" : "light";
+}
+
+function persistThemePreference() {
+  localStorage.setItem(THEME_KEY, appState.theme);
+}
+
+function applyTheme() {
+  document.body.classList.toggle("theme-dark", appState.theme === "dark");
+
+  const themeToggle = document.getElementById("theme-toggle");
+  if (!themeToggle) {
+    return;
+  }
+
+  const showingDark = appState.theme === "dark";
+  themeToggle.textContent = showingDark ? "Light Mode" : "Dark Mode";
+  themeToggle.setAttribute("aria-label", showingDark ? "Switch to light mode" : "Switch to dark mode");
+}
+
+function toggleTheme() {
+  appState.theme = appState.theme === "dark" ? "light" : "dark";
+  persistThemePreference();
+  applyTheme();
 }
 
 function calculateElapsed(task) {
@@ -238,6 +277,15 @@ function renderJobs() {
   const select = document.getElementById("job-list");
   select.innerHTML = "";
 
+  if (appState.jobs.length === 0) {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "No jobs found for this date";
+    select.appendChild(empty);
+    select.value = "";
+    return;
+  }
+
   for (const job of appState.jobs) {
     const option = document.createElement("option");
     option.value = job.id;
@@ -246,6 +294,26 @@ function renderJobs() {
     select.appendChild(option);
   }
   select.value = appState.selectedJobId || "";
+}
+
+function renderSelectedDate() {
+  const dateText = document.getElementById("current-date");
+  const input = document.getElementById("job-date-picker");
+  const listLabel = document.getElementById("job-list-label");
+  const selected = appState.selectedDate || todayIsoDateLocal();
+
+  if (input && input.value !== selected) {
+    input.value = selected;
+  }
+
+  const dateObj = new Date(`${selected}T00:00:00`);
+  const longDate = formatLongDate(dateObj);
+  if (dateText) {
+    dateText.textContent = longDate;
+  }
+  if (listLabel) {
+    listLabel.textContent = `Jobs for ${longDate}`;
+  }
 }
 
 function renderTaskList() {
@@ -330,6 +398,7 @@ function renderSlots() {
 }
 
 function render() {
+  renderSelectedDate();
   renderJobs();
   renderTaskList();
   renderSlots();
@@ -437,11 +506,10 @@ async function loadJobsFromCloud() {
     return;
   }
 
-  const today = todayIsoDateLocal();
   const { data, error } = await appState.supabase
     .from("jobs")
     .select("id, external_job_id, customer, vehicle, detail_job_type, service_date, created_at")
-    .eq("service_date", today)
+    .eq("service_date", appState.selectedDate)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -467,6 +535,28 @@ async function loadJobsFromCloud() {
 
   persistCachedState();
   renderJobs();
+}
+
+async function setSelectedDate(nextDate) {
+  if (!nextDate || nextDate === appState.selectedDate) {
+    return;
+  }
+
+  appState.selectedDate = nextDate;
+  appState.jobs = [];
+  appState.selectedJobId = null;
+  appState.tasks = [];
+  persistCachedState();
+  render();
+
+  if (appState.isOnline && appState.supabase) {
+    await loadJobsFromCloud();
+    if (appState.selectedJobId) {
+      await loadTasksForJob(appState.selectedJobId);
+    } else {
+      render();
+    }
+  }
 }
 
 async function loadTasksForJob(jobId) {
@@ -592,7 +682,14 @@ function registerServiceWorker() {
 }
 
 function setupUiEvents() {
-  document.getElementById("current-date").textContent = formatLongDate(new Date());
+  applyTheme();
+  renderSelectedDate();
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    toggleTheme();
+  });
+  document.getElementById("job-date-picker").addEventListener("change", (event) => {
+    setSelectedDate(event.target.value);
+  });
   document.getElementById("job-list").addEventListener("change", (event) => {
     selectJob(event.target.value);
   });
@@ -608,6 +705,7 @@ window.GLDTaskTracker = {
 async function init() {
   loadCachedState();
   loadMutationQueue();
+  loadThemePreference();
   setupUiEvents();
   setConnectionPill();
   render();

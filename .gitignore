@@ -1,0 +1,7 @@
+# Environment files
+.env
+.env.*
+*.env
+
+# Keep examples committed
+!.env.example

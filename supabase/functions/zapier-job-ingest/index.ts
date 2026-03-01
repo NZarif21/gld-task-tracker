@@ -15,7 +15,8 @@ type ZapPayload = {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-zapier-secret",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-zapier-secret, x-ingest-secret",
 };
 
 Deno.serve(async (req) => {
@@ -24,8 +25,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const incomingSecret = req.headers.get("x-zapier-secret");
-    const expectedSecret = Deno.env.get("ZAPIER_SHARED_SECRET");
+    const incomingSecret = req.headers.get("x-ingest-secret") ?? req.headers.get("x-zapier-secret");
+    const expectedSecret =
+      Deno.env.get("JOB_INGEST_SHARED_SECRET") ?? Deno.env.get("ZAPIER_SHARED_SECRET");
 
     if (!expectedSecret || incomingSecret !== expectedSecret) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {

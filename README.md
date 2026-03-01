@@ -32,26 +32,29 @@ window.APP_CONFIG = {
 };
 ```
 
-## 2. Deploy Zapier webhook function
+## 2. Deploy ingest webhook function
 Use Supabase CLI from this repo:
 
 ```bash
 supabase login
 supabase link --project-ref YOUR_PROJECT_REF
-supabase secrets set ZAPIER_SHARED_SECRET=YOUR_LONG_SECRET
+supabase secrets set JOB_INGEST_SHARED_SECRET=YOUR_LONG_SECRET
 supabase functions deploy zapier-job-ingest
 ```
 
 Invoke URL format:
 `https://YOUR_PROJECT_REF.supabase.co/functions/v1/zapier-job-ingest`
 
-## 3. Configure Zapier
-In Zapier, use a Webhooks action:
+Legacy compatibility:
+- `ZAPIER_SHARED_SECRET` still works if already configured.
+- Header `x-zapier-secret` still works.
+
+## 3. Configure Zapier (optional)
+If you continue using Zapier Webhooks, use:
 - Method: `POST`
 - URL: your function URL above
-- Header: `x-zapier-secret: YOUR_LONG_SECRET`
+- Header: `x-ingest-secret: YOUR_LONG_SECRET` (or `x-zapier-secret`)
 - Header: `content-type: application/json`
-- Body (example):
 - Body (example):
 
 ```json
@@ -70,7 +73,130 @@ In Zapier, use a Webhooks action:
 
 `detail_job_type` is mapped to preset tasks stored in `detail_job_presets`.
 
-## 4. Host the app publicly
+## 4. Configure Google Sheets + Apps Script (free polling path)
+If you want to avoid Zapier premium steps, use this flow:
+
+1. Send OrbisX booking data into a Google Sheet (via OrbisX export/webhook/tooling).
+2. Add these columns in row 1:
+   - `external_job_id`
+   - `customer`
+   - `vehicle`
+   - `service_date`
+   - `detail_job_type`
+   - `crm_job_number` (optional)
+   - `service_package_name` (optional)
+   - `sync_status` (empty initially)
+   - `synced_at` (empty initially)
+   - `sync_response` (empty initially)
+3. In the Sheet: Extensions -> Apps Script, then paste this script:
+
+```javascript
+const INGEST_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/zapier-job-ingest";
+const INGEST_SECRET = "YOUR_LONG_SECRET";
+const SHEET_NAME = "Bookings";
+
+function syncBookingsToSupabase() {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error(`Missing sheet: ${SHEET_NAME}`);
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return;
+
+  const header = values[0];
+  const idx = Object.fromEntries(header.map((name, i) => [String(name).trim(), i]));
+
+  const required = [
+    "external_job_id",
+    "customer",
+    "vehicle",
+    "service_date",
+    "detail_job_type",
+    "sync_status",
+    "synced_at",
+    "sync_response",
+  ];
+  required.forEach((name) => {
+    if (idx[name] === undefined) throw new Error(`Missing required column: ${name}`);
+  });
+
+  for (let r = 1; r < values.length; r++) {
+    const row = values[r];
+    const status = String(row[idx.sync_status] || "").toLowerCase();
+    if (status === "ok") continue;
+
+    const payload = {
+      external_job_id: String(row[idx.external_job_id] || "").trim(),
+      customer: String(row[idx.customer] || "").trim(),
+      vehicle: String(row[idx.vehicle] || "").trim(),
+      service_date: normalizeDate(row[idx.service_date]),
+      detail_job_type: String(row[idx.detail_job_type] || "").trim(),
+      metadata: {
+        crm_job_number: idx.crm_job_number !== undefined ? row[idx.crm_job_number] : null,
+        service_package_name:
+          idx.service_package_name !== undefined ? row[idx.service_package_name] : null,
+      },
+    };
+
+    if (
+      !payload.external_job_id ||
+      !payload.customer ||
+      !payload.vehicle ||
+      !payload.service_date ||
+      !payload.detail_job_type
+    ) {
+      sheet.getRange(r + 1, idx.sync_status + 1).setValue("error");
+      sheet.getRange(r + 1, idx.sync_response + 1).setValue("Missing required fields");
+      continue;
+    }
+
+    try {
+      const resp = UrlFetchApp.fetch(INGEST_URL, {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "x-ingest-secret": INGEST_SECRET,
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true,
+      });
+
+      const code = resp.getResponseCode();
+      const body = resp.getContentText();
+      const ok = code >= 200 && code < 300;
+
+      sheet.getRange(r + 1, idx.sync_status + 1).setValue(ok ? "ok" : "error");
+      sheet.getRange(r + 1, idx.synced_at + 1).setValue(new Date());
+      sheet.getRange(r + 1, idx.sync_response + 1).setValue(body.slice(0, 500));
+    } catch (e) {
+      sheet.getRange(r + 1, idx.sync_status + 1).setValue("error");
+      sheet.getRange(r + 1, idx.sync_response + 1).setValue(String(e).slice(0, 500));
+    }
+  }
+}
+
+function normalizeDate(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, "UTC", "yyyy-MM-dd");
+  }
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return Utilities.formatDate(d, "UTC", "yyyy-MM-dd");
+  return "";
+}
+```
+
+4. Click Run on `syncBookingsToSupabase` once to authorize.
+5. In Apps Script: Triggers -> Add Trigger:
+   - Function: `syncBookingsToSupabase`
+   - Event source: `Time-driven`
+   - Type: every 5 or 15 minutes
+6. Ensure `detail_job_type` values match presets in `detail_job_presets` (`full_premium`, `full_standard`, `partial_standard`, etc.).
+
+The ingest function upserts by `external_job_id`, so re-running the same row updates the existing job safely.
+
+## 5. Host the app publicly
 You need HTTPS hosting so iPad users can access it anywhere.
 
 Simple options:
@@ -81,7 +207,7 @@ Simple options:
 
 Publish the repo as a static site. No build step is required.
 
-## 5. Install on iPad
+## 6. Install on iPad
 1. Open hosted URL in Safari.
 2. Tap Share -> Add to Home Screen.
 3. Launch from Home Screen (standalone app mode).

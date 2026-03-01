@@ -28,12 +28,19 @@
         <div class="topbar-meta">
           <div class="connection-pill" id="connection-state">Offline</div>
           <button class="btn sync" id="sync-now" type="button">Sync</button>
+          <button class="btn theme" id="theme-toggle" type="button" aria-label="Toggle theme">
+            Dark Mode
+          </button>
+          <label class="date-picker-wrap" for="job-date-picker">
+            <span class="date-picker-label">Job Date</span>
+            <input class="date-picker-input" id="job-date-picker" type="date" />
+          </label>
           <div class="date-pill" id="current-date"></div>
         </div>
       </header>
 
       <section class="job-selector">
-        <label for="job-list">Jobs for Today</label>
+        <label for="job-list" id="job-list-label">Jobs for Selected Date</label>
         <select id="job-list" aria-label="Select a job"></select>
       </section>
 
