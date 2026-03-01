@@ -12,6 +12,20 @@
   --shadow: 0 12px 28px rgba(6, 32, 65, 0.08);
 }
 
+body.theme-dark {
+  --bg: #0f141c;
+  --surface: #171f2b;
+  --surface-alt: #202a39;
+  --text: #e8eef7;
+  --text-soft: #a7b4c7;
+  --accent: #51a4d0;
+  --ok: #57b98a;
+  --warn: #f0a34d;
+  --done: #93a1b5;
+  --border: #2d3a4d;
+  --shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -19,11 +33,15 @@
 body {
   margin: 0;
   font-family: "Barlow", sans-serif;
-  background: radial-gradient(circle at 15% 10%, #ffffff, #e8edf6 58%);
+  background: radial-gradient(circle at 15% 10%, #ffffff, var(--bg) 58%);
   color: var(--text);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+body.theme-dark {
+  background: radial-gradient(circle at 15% 10%, #1a2433, #0c1118 62%);
 }
 
 .app-shell {
@@ -50,6 +68,28 @@ body {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+}
+
+.date-picker-wrap {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.date-picker-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.date-picker-input {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.35rem 0.55rem;
+  background: #fff;
+  color: var(--text);
 }
 
 .eyebrow {
@@ -265,6 +305,11 @@ h1 {
   color: #355d93;
 }
 
+.btn.theme {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -284,7 +329,8 @@ h1 {
 
   .topbar-meta {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .workspace {
